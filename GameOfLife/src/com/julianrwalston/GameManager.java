@@ -1,28 +1,41 @@
 package com.julianrwalston;
 
 import javax.swing.*;
+import javax.swing.filechooser.FileFilter;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.io.*;
 import java.util.concurrent.TimeUnit;
 
-public class GameManager {
+/**
+ * Created by Julian Walston on 6/15/2021
+ */
 
-    public static int CELL_SIZE = 1000;
+/*
+TODO: Set default location of JFileChooser
+ Add pause button, add step button, add 'create board' option
+ */
+
+public class GameManager implements Serializable {
 
     private int[][] startState;
     private int[][] boardState;
     private int[][] nextGen;
-    private final int height;
-    private final int width;
+    private int height;
+    private int width;
 
     private JFrame frame;
+    private JPanel mainPanel;
     private JPanel cellsPanel;
     private JPanel menuPanel;
     private JPanel[][] cells;
+    private JMenuBar menu;
+    private JMenu fileMenu;
+    private JMenuItem saveMenuItem;
+    private JMenuItem loadMenuItem;
     private JButton startButton;
     private JButton resetButton;
-    private JButton randomBoard;
+    private JButton randomBoardButton;
 
     private boolean running = false;
 
@@ -35,27 +48,58 @@ public class GameManager {
     public void setUpGame() {
         boardState = randomState();
         startState = boardState;
-        setUpGUI();
-        display(boardState);
-    }
-
-    private void setUpGUI() {
 
         frame = new JFrame("Game of Life");
         frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+        frame.setVisible(true);
+
+        setUpGUI(width, height);
+        display(boardState);
+    }
+
+    private void setUpGUI(int width, int height) {
+        this.width = width;
+        this.height = height;
+
+        initializeComponents();
+
+        createBoard();
+
+        setListeners();
+
+        addComponentsToFrame();
+    }
+
+    /**
+     * Helper method for setUpGUI
+     * creates GUI components
+     */
+    private void initializeComponents() {
+        mainPanel = new JPanel();
         cellsPanel = new JPanel();
         menuPanel = new JPanel();
         cells = new JPanel[height][width];
+
+        menu = new JMenuBar();
+        fileMenu = new JMenu("File");
+        saveMenuItem = new JMenuItem("Save");
+        loadMenuItem = new JMenuItem("Load");
+
         startButton = new JButton("Start");
         resetButton = new JButton("Reset");
-        randomBoard = new JButton("Random Board");
+        randomBoardButton = new JButton("Random Board");
+    }
 
+    /**
+     * Helper method for setUpGUI
+     * creates a cells to form the board based on the current board state
+     */
+    private void createBoard() {
         cellsPanel.setLayout(new GridLayout(height, width));
 
         for (int col = 0; col < height; col++) {
             for (int row = 0; row < width; row++) {
                 JPanel currentCell = new JPanel();
-                currentCell.setSize(CELL_SIZE,CELL_SIZE);
 
                 if (boardState[col][row] == 1) {
                     currentCell.setBackground(Color.BLACK);
@@ -66,7 +110,13 @@ public class GameManager {
                 cellsPanel.add(cells[col][row]);
             }
         }
+    }
 
+    /**
+     * Helper method for setUpGUI
+     * creates actionListeners for the buttons and menuItems
+     */
+    private void setListeners() {
         // This button sets the game running when pressed.
         startButton.addActionListener(e -> {
             running = true;
@@ -82,32 +132,103 @@ public class GameManager {
             });
             newThread.start();
         });
-        menuPanel.add(startButton);
 
         resetButton.addActionListener(e -> {
             running = false;
             boardState = startState;
             display(boardState);
         });
-        menuPanel.add(resetButton);
 
-        randomBoard.addActionListener(e -> {
+        randomBoardButton.addActionListener(e -> {
             running = false;
             boardState = randomState();
             startState = boardState;
             display(boardState);
         });
-        menuPanel.add(randomBoard);
 
+        saveMenuItem.addActionListener(e -> {
+            try {
+                JFileChooser fc = new JFileChooser();
+                fc.showSaveDialog(frame);
+                if (fc.getSelectedFile() != null) {
 
-        frame.setLayout(new BorderLayout());
-        frame.add(cellsPanel, BorderLayout.CENTER);
-        frame.add(menuPanel, BorderLayout.SOUTH);
-        frame.pack();
-        frame.setVisible(true);
+                    //Saving of object in a file
+                    FileOutputStream file = new FileOutputStream(fc.getSelectedFile().getAbsolutePath() + ".gol");
+                    ObjectOutputStream os = new ObjectOutputStream(file);
+
+                    // Method for serialization of object
+                    os.writeObject(startState);
+
+                    os.close();
+                    file.close();
+                }
+            }
+            catch(IOException ex) {
+                System.out.println("IOException is caught");
+                ex.printStackTrace();
+            }
+        });
+
+        loadMenuItem.addActionListener(e -> {
+            try {
+                JFileChooser fc = new JFileChooser();
+                FileFilter filter =
+                        new FileNameExtensionFilter(".gol Files", "gol");
+                fc.setFileFilter(filter);
+                fc.showOpenDialog(frame);
+                //Saving of object in a file
+                if (fc.getSelectedFile() != null) {
+                    FileInputStream file = new FileInputStream(fc.getSelectedFile().getAbsolutePath());
+                    ObjectInputStream is = new ObjectInputStream(file);
+
+                    // Method for serialization of object
+                    boardState = (int[][]) is.readObject();
+
+                    // Destroy current GUI (keeping frame)
+                    mainPanel.setVisible(false);
+
+                    // Reset GUI with new width/height
+                    setUpGUI(boardState[0].length, boardState.length);
+                    startState = boardState;
+                    display(boardState);
+
+                    is.close();
+                    file.close();
+                }
+            }
+            catch(IOException io) {
+                System.out.println("IOException");
+                io.printStackTrace();
+            } catch (ClassNotFoundException cnf) {
+                System.out.println("Class not found");
+                cnf.printStackTrace();
+            }
+        });
     }
 
-    public void nextGeneration() {
+    /**
+     * Helper method for setUpGUI
+     * adds all components to the frame
+     */
+    private void addComponentsToFrame() {
+        menuPanel.add(startButton);
+        menuPanel.add(resetButton);
+        menuPanel.add(randomBoardButton);
+
+        fileMenu.add(saveMenuItem);
+        fileMenu.add(loadMenuItem);
+        menu.add(fileMenu);
+
+        frame.setLayout(new BorderLayout());
+        mainPanel.setLayout(new BorderLayout());
+        mainPanel.add(cellsPanel, BorderLayout.CENTER);
+        mainPanel.add(menuPanel, BorderLayout.SOUTH);
+        frame.add(mainPanel, BorderLayout.CENTER);
+        frame.add(menu, BorderLayout.NORTH);
+        frame.pack();
+    }
+
+    private void nextGeneration() {
         nextGen = new int[height][width];
 
         for(int row = 0; row < width; row++) {
@@ -134,20 +255,6 @@ public class GameManager {
         display(boardState);
     }
 
-    private void display(int[][] boardState) {
-        for (int col = 0; col < height; col++) {
-            for (int row = 0; row < width; row++) {
-                if (boardState[col][row] == 1) {
-                    cells[col][row].setBackground(Color.BLACK);
-                } else {
-                    cells[col][row].setBackground(Color.WHITE);
-                }
-                cells[col][row].repaint();
-            }
-        }
-        frame.repaint();
-    }
-
     private int countNeighbors(int[][] boardState, int row, int col) {
         int neighbors = 0;
         for (int i = -1; i < 2; i++) {
@@ -163,6 +270,20 @@ public class GameManager {
         return neighbors;
     }
 
+    private void display(int[][] boardState) {
+        for (int col = 0; col < height; col++) {
+            for (int row = 0; row < width; row++) {
+                if (boardState[col][row] == 1) {
+                    cells[col][row].setBackground(Color.BLACK);
+                } else {
+                    cells[col][row].setBackground(Color.WHITE);
+                }
+                cells[col][row].repaint();
+            }
+        }
+        frame.repaint();
+    }
+
     private int[][] randomState() {
         int[][] randState = new int[height][width];
         for (int row = 0; row < width; row++) {
@@ -171,9 +292,5 @@ public class GameManager {
             }
         }
         return randState;
-    }
-
-    public void setBoardState(int[][] boardState) {
-        this.boardState = boardState;
     }
 }
