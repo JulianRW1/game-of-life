@@ -12,13 +12,15 @@ import java.util.concurrent.TimeUnit;
  */
 
 /*
-TODO: Set default location of JFileChooser
- Add pause button, add step button, add 'create board' option
+TODO: Implement way to change width/height in-game
  */
 
 public class GameManager implements Serializable {
 
-    private int[][] startState;
+    private String defaultDirectory =
+            "C:\\Users\\Julian Walston\\Documents\\IdeaProjects\\game-of-life\\GameOfLife\\savedGames";
+
+    private int[][] seed;
     private int[][] boardState;
     private int[][] nextGen;
     private int height;
@@ -33,7 +35,11 @@ public class GameManager implements Serializable {
     private JMenu fileMenu;
     private JMenuItem saveMenuItem;
     private JMenuItem loadMenuItem;
-    private JButton startButton;
+    private JMenu editMenu;
+    private JMenuItem editSeedMenuItem;
+    private JMenuItem createNewSeedMenuItem;
+    private JButton playPauseButton;
+    private JButton stepButton;
     private JButton resetButton;
     private JButton randomBoardButton;
 
@@ -47,7 +53,7 @@ public class GameManager implements Serializable {
 
     public void setUpGame() {
         boardState = randomState();
-        startState = boardState;
+        seed = boardState;
 
         frame = new JFrame("Game of Life");
         frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
@@ -82,12 +88,16 @@ public class GameManager implements Serializable {
 
         menu = new JMenuBar();
         fileMenu = new JMenu("File");
-        saveMenuItem = new JMenuItem("Save");
-        loadMenuItem = new JMenuItem("Load");
+        saveMenuItem = new JMenuItem("Save Seed");
+        loadMenuItem = new JMenuItem("Load Seed");
+        editMenu = new JMenu("Edit");
+        editSeedMenuItem = new JMenuItem("Edit Seed");
+        createNewSeedMenuItem = new JMenuItem("Create New Seed");
 
-        startButton = new JButton("Start");
+        playPauseButton = new JButton("Play/Pause");
+        stepButton = new JButton("Step");
         resetButton = new JButton("Reset");
-        randomBoardButton = new JButton("Random Board");
+        randomBoardButton = new JButton("Random Seed");
     }
 
     /**
@@ -118,38 +128,49 @@ public class GameManager implements Serializable {
      */
     private void setListeners() {
         // This button sets the game running when pressed.
-        startButton.addActionListener(e -> {
-            running = true;
-            Thread newThread = new Thread(() -> {
-                while (running) {
-                    try {
-                        TimeUnit.MILLISECONDS.sleep(100);
-                    } catch (InterruptedException ex) {
-                        ex.printStackTrace();
+        playPauseButton.addActionListener(e -> {
+            if (running) {
+                running = false;
+            } else {
+                running = true;
+                Thread newThread = new Thread(() -> {
+                    while (running) {
+                        try {
+                            TimeUnit.MILLISECONDS.sleep(100);
+                        } catch (InterruptedException ex) {
+                            ex.printStackTrace();
+                        }
+                        nextGeneration();
                     }
-                    nextGeneration();
-                }
-            });
-            newThread.start();
+                });
+                newThread.start();
+            }
+        });
+
+        stepButton.addActionListener(e -> {
+            if (!running) {
+                nextGeneration();
+            }
         });
 
         resetButton.addActionListener(e -> {
             running = false;
-            boardState = startState;
+            boardState = seed;
             display(boardState);
         });
 
         randomBoardButton.addActionListener(e -> {
             running = false;
             boardState = randomState();
-            startState = boardState;
+            seed = boardState;
             display(boardState);
         });
 
         saveMenuItem.addActionListener(e -> {
             try {
-                JFileChooser fc = new JFileChooser();
+                JFileChooser fc = new JFileChooser(defaultDirectory);
                 fc.showSaveDialog(frame);
+
                 if (fc.getSelectedFile() != null) {
 
                     //Saving of object in a file
@@ -157,7 +178,7 @@ public class GameManager implements Serializable {
                     ObjectOutputStream os = new ObjectOutputStream(file);
 
                     // Method for serialization of object
-                    os.writeObject(startState);
+                    os.writeObject(seed);
 
                     os.close();
                     file.close();
@@ -171,7 +192,7 @@ public class GameManager implements Serializable {
 
         loadMenuItem.addActionListener(e -> {
             try {
-                JFileChooser fc = new JFileChooser();
+                JFileChooser fc = new JFileChooser(defaultDirectory);
                 FileFilter filter =
                         new FileNameExtensionFilter(".gol Files", "gol");
                 fc.setFileFilter(filter);
@@ -189,7 +210,7 @@ public class GameManager implements Serializable {
 
                     // Reset GUI with new width/height
                     setUpGUI(boardState[0].length, boardState.length);
-                    startState = boardState;
+                    seed = boardState;
                     display(boardState);
 
                     is.close();
@@ -204,6 +225,22 @@ public class GameManager implements Serializable {
                 cnf.printStackTrace();
             }
         });
+
+        editSeedMenuItem.addActionListener(e -> {
+            SeedEditor editor = new SeedEditor();
+            editor.open(boardState);
+        });
+
+        createNewSeedMenuItem.addActionListener(e -> {
+            int[][] emptyBoard = new int[height][width];
+            for (int col = 0; col < height; col++) {
+                for (int row = 0; row < width; row++) {
+                    emptyBoard[col][row] = 0;
+                }
+            }
+            SeedEditor editor = new SeedEditor();
+            editor.open(emptyBoard);
+        });
     }
 
     /**
@@ -211,13 +248,17 @@ public class GameManager implements Serializable {
      * adds all components to the frame
      */
     private void addComponentsToFrame() {
-        menuPanel.add(startButton);
+        menuPanel.add(playPauseButton);
+        menuPanel.add(stepButton);
         menuPanel.add(resetButton);
         menuPanel.add(randomBoardButton);
 
         fileMenu.add(saveMenuItem);
         fileMenu.add(loadMenuItem);
+        editMenu.add(editSeedMenuItem);
+        editMenu.add(createNewSeedMenuItem);
         menu.add(fileMenu);
+        menu.add(editMenu);
 
         frame.setLayout(new BorderLayout());
         mainPanel.setLayout(new BorderLayout());
